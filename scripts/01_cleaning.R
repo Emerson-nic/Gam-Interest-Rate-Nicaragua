@@ -74,4 +74,56 @@ names(banco_2019)
 message("through 2018 names:")
 names(banco_2008)
 
-### Calculating liquidity ----
+### calculation of financial ratios ----
+
+#pre-2018 data
+banco_2008_clean <- banco_2008 %>%
+  dplyr::mutate(
+    #variables for liquidity
+    disponibilidades_total = disponibilidades,
+    depositos_totales = obligaciones_con_el_publico,
+    
+    #calculating of liquidity ratio
+    ratio_liquidez = disponibilidades_total / depositos_totales,
+    
+    ##calculating Mora
+    cartera_mora = creditos_vencidos + creditos_en_cobro_judicial,
+    cartera_bruta = cartera_de_creditos_neta + provisiones_por_incobrabilidad_de_cartera_de_creditos,
+    ratio_morosidad = cartera_mora / cartera_bruta
+  ) %>%
+  dplyr::select(fecha, ratio_liquidez, ratio_morosidad, disponibilidades_total, depositos_totales)
+
+#post-2019 data 
+banco_2019_clean <- banco_2019 %>%
+  dplyr::mutate(
+    #variables for liquidity
+    disponibilidades_total = efectivo_y_equivalentes_de_efectivo,
+    depositos_totales = obligaciones_con_el_publico,
+    
+    #calculating of liquidity ratio
+    ratio_liquidez = disponibilidades_total / depositos_totales,
+    
+    #calculating Mora
+    cartera_mora = vencidos + cobro_judicial,
+    cartera_bruta = cartera_de_creditos_neta + provision_de_cartera_de_creditos,
+    ratio_morosidad = cartera_mora / cartera_bruta
+  ) %>%
+  dplyr::select(fecha, ratio_liquidez, ratio_morosidad, disponibilidades_total, depositos_totales)
+
+#merging both periods 
+datos_bancarios <- dplyr::bind_rows(banco_2008_clean, banco_2019_clean) %>%
+  dplyr::arrange(fecha) %>%
+  dplyr::distinct(fecha, .keep_all = TRUE)
+
+
+tibble::as_tibble(datos_bancarios)
+
+#merging all variables ----
+
+banca <- datos_bancarios %>%
+  dplyr::select(fecha, ratio_liquidez, ratio_morosidad) %>%
+  dplyr::inner_join(imae, by = "fecha") %>%
+  dplyr::arrange(fecha)
+
+tibble::as_tibble(banca)
+  
