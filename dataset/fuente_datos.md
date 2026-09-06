@@ -2,15 +2,23 @@
 
 1.  Tasa de interés activa nominal en MN o
 
-2.  Tasa de interés implícita: $\frac{\text{Ingresos Financieros por Préstamos}\_{it} \times 12}{\text{Cartera de Crédito Bruta}\_{it}}$
+2.  $\text{Tasa de interés implícita}_{it}$: $\frac{\text{Ingresos del mes} \times 12}{(\text{Cartera}_t + \text{Cartera}_{t-1}) / 2}$
 
-3.  IMAE
+donde se aplico una desacumulación de ingreso financiero:
 
-4.  IPC
+$$\text{Ingresos del Mes}_{t} = \begin{cases} \text{Ingresos Acumulados}_{t} & \text{si Mes} = 1 \\ \text{Ingresos Acumulados}_{t} - \text{Ingresos Acumulados}_{t-1} & \text{si Mes} > 1 \end{cases}$$
 
-5.  Liquidez: $\frac{\text{Disponibilidades}_{it}}{\text{Obligaciones con el Público (Depósitos)}_{it}}$
+3.  $\text{Ratio de morosidad}_{it}$: $\frac{\text{Vencidos}_{it} + \text{Cobro Judicial}_{it}}{\text{Cartera de Créditos Neta}_{it} + \text{Provisión de Cartera}_{it}}$
 
-6.  Tiempo: actua como una tendencia determinística no lineal flexible
+4.  IMAE
+
+5.  IPC
+
+6.  $\text{Liquidez}_{it}$ : $\frac{\text{Efectivo y Equivalentes de Efectivo}_{it}}{\text{Obligaciones con el Público (Depósitos)}_{it}}$
+
+7.  Tiempo: actúa como una tendencia determinística no lineal flexible
+
+Nota: subíndice $i$ representa a la entidad Bancaria, en cuanto el subíndice $t$ representa el tiempo
 
 ## Base de datos
 
