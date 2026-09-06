@@ -26,6 +26,21 @@ tibble::as_tibble(imae)
 imae <- imae %>%
   dplyr::mutate(fecha = as.Date(fecha, format = "%d-%m-%Y"))
 
+imae <- imae %>%
+  dplyr::mutate(
+    ln_imae = log(imae)
+  )
+
+imae <- imae %>%
+  dplyr::mutate(
+    d_ln_imae = ln_imae - dplyr::lag(ln_imae, 12)
+    ) %>%
+  dplyr::select(
+    -imae, -ln_imae
+  ) %>%
+  stats::na.omit()
+  
+  
 #also it can do like this
 # imae <- imae %>%
 #   mutate(fecha = dmy(fecha))  
@@ -42,6 +57,14 @@ ipc <- ipc %>%
 
 ipc <- ipc %>%
   dplyr::mutate(fecha = as.Date(fecha, format = "%d-%m-%Y"))
+
+ipc <- ipc %>%
+  dplyr::mutate(
+    ln_ipc = log(ipc),
+    d_ln_ipc = ln_ipc - dplyr::lag(ln_ipc, 12)
+  ) %>%
+  dplyr::select(-ipc, -ln_ipc) %>%
+  stats::na.omit()
 
 tibble::as_tibble(ipc)
 
@@ -209,7 +232,7 @@ banca <- banca %>%
   dplyr::select(fecha, tasa_interes_activo, tasa_implicita_pct, ratio_morosidad_pct, ratio_liquidez_pct, dplyr::everything())
 
 banca <- banca %>%
-  na.omit()
+  stats::na.omit()
 
 tibble::as_tibble(banca)
 
@@ -218,6 +241,32 @@ banca %>%
   tibble::as_tibble() %>%
   print(n = 300)
 
-#
+#smoothed interest rate  (outliers) ----
+
+names(banca)
+
+banca <- banca %>%
+  dplyr::select(-tasa_implicita, -ratio_morosidad, -ratio_liquidez) 
+
+names(banca)
+  
+banca <- banca %>%
+  dplyr::mutate(
+    #apply the quarterly moving average (3 months) only to the implicit rate
+    tasa_implicita_pct_clean = zoo::rollmean(tasa_implicita_pct, k = 3, fill = NA, align = "right")
+  ) %>%
+  tibble::as_tibble() %>%
+  print(n = 100)
+
+banca %>%
+  dplyr::select(tasa_implicita_pct_clean, tasa_implicita_pct, tasa_interes_activo) %>%
+  tibble::as_tibble() %>%
+  print(n = 100)
+
+banca <- banca %>%
+  stats::na.omit()
+
+banca <- banca %>%
+  dplyr::select(-tasa_implicita_pct)
 
 readr::write_csv(banca, "csv/sitema_bancario.csv")
