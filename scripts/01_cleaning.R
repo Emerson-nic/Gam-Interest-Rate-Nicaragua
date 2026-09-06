@@ -212,7 +212,7 @@ datos_bancarios <- dplyr::bind_rows(banco_2008_clean, banco_2019_clean) %>%
 
 tibble::as_tibble(datos_bancarios)
 
-#merging all variables ----
+  #merging all variables ----
 
 banca <- datos_bancarios %>%
   dplyr::select(fecha, ratio_liquidez, ratio_morosidad, tasa_implicita) %>%
