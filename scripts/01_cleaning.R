@@ -6,7 +6,8 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load(readxl,
                tidyverse,
                janitor,
-               dplyr
+               dplyr,
+               zoo
 )
 
 #load csv ----
@@ -139,22 +140,16 @@ ingresos_2008 <- resultados_2008 %>%
 
 banco_2008_clean <- banco_2008 %>%
   dplyr::inner_join(ingresos_2008, by = "fecha") %>%
+  dplyr::arrange(fecha) %>%
   dplyr::mutate(
-    #variables for liquidity
     disponibilidades_total = disponibilidades,
     depositos_totales = obligaciones_con_el_publico,
-    
-    #calculating of liquidity ratio
     ratio_liquidez = disponibilidades_total / depositos_totales,
-    
-    #calculating Mora
     cartera_mora = creditos_vencidos + creditos_en_cobro_judicial,
     cartera_bruta = cartera_de_creditos_neta + provisiones_por_incobrabilidad_de_cartera_de_creditos,
     ratio_morosidad = cartera_mora / cartera_bruta,
-    
-    #calculating interest rate
-    tasa_implicita = (ingresos_mes * 12) / cartera_bruta
-    ) %>%
+    tasa_implicita = (ingresos_mes * 12) / ((cartera_bruta + dplyr::lag(cartera_bruta)) / 2)
+  ) %>%
   dplyr::select(fecha, ratio_liquidez, ratio_morosidad, tasa_implicita)
 
 #post-2019 data 
@@ -174,21 +169,15 @@ ingresos_2019 <- resultados_2019 %>%
 
 banco_2019_clean <- banco_2019 %>%
   dplyr::inner_join(ingresos_2019, by = "fecha") %>%
+  dplyr::arrange(fecha) %>%
   dplyr::mutate(
-    #variables for liquidity
     disponibilidades_total = efectivo_y_equivalentes_de_efectivo,
     depositos_totales = obligaciones_con_el_publico,
-    
-    #calculating of liquidity ratio
     ratio_liquidez = disponibilidades_total / depositos_totales,
-    
-    #calculating Mora
     cartera_mora = vencidos + cobro_judicial,
     cartera_bruta = cartera_de_creditos_neta + provision_de_cartera_de_creditos,
     ratio_morosidad = cartera_mora / cartera_bruta,
-    
-    #calculating implicit interest rate
-    tasa_implicita = (ingresos_mes * 12) / cartera_bruta
+    tasa_implicita = (ingresos_mes * 12) / ((cartera_bruta + dplyr::lag(cartera_bruta)) / 2)
   ) %>%
   dplyr::select(fecha, ratio_liquidez, ratio_morosidad, tasa_implicita)
 
@@ -219,11 +208,16 @@ banca <- banca %>%
   ) %>%
   dplyr::select(fecha, tasa_interes_activo, tasa_implicita_pct, ratio_morosidad_pct, ratio_liquidez_pct, dplyr::everything())
 
+banca <- banca %>%
+  na.omit()
+
 tibble::as_tibble(banca)
 
 banca %>% 
   dplyr::select(tasa_interes_activo, tasa_implicita_pct) %>% 
   tibble::as_tibble() %>%
   print(n = 300)
+
+#
 
 readr::write_csv(banca, "csv/sitema_bancario.csv")
