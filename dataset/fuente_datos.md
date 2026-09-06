@@ -40,4 +40,4 @@ Desde el 2008:
 
 ## Pregunta de la investivacion
 
-A partir de qué nivel de tasa activa promedio de la economía la morosidad nacional entra en aceleración exponencial?
+Hasta qué nivel máximo puede subir la tasa de interés sin que la tasa de morosidad se dispare de manera exponencial?
