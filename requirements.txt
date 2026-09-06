@@ -1,3 +1,4 @@
 pandas==2.2.2
 ydata-profiling==4.10.0
-setuptools
+setuptools==69.5.1
+wheel==0.48.0  #allow to install package .whl pre-compiled 
