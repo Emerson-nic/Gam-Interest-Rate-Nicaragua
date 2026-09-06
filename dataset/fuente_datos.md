@@ -10,9 +10,9 @@ $$\text{Ingresos del Mes}_{t} = \begin{cases} \text{Ingresos Acumulados}_{t} & \
 
 3.  $\text{Ratio de morosidad}_{it}$: $\frac{\text{Vencidos}_{it} + \text{Cobro Judicial}_{it}}{\text{Cartera de Créditos Neta}_{it} + \text{Provisión de Cartera}_{it}}$
 
-4.  IMAE
+4.  $\text{Crecimiento IMAE}_t$: $\ln(\text{IMAE}_t) - \ln(\text{IMAE}_{t-12})$
 
-5.  IPC
+5.  $\text{Inflación}_t$: $\ln(\text{IPC}_t) - \ln(\text{IPC}_{t-12})$
 
 6.  $\text{Liquidez}_{it}$ : $\frac{\text{Efectivo y Equivalentes de Efectivo}_{it}}{\text{Obligaciones con el Público (Depósitos)}_{it}}$
 
