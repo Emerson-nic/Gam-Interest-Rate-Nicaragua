@@ -8,7 +8,7 @@ import pandas as pd
 from ydata_profiling import ProfileReport
 
 #load csv
-banca = pd.read_csv("csv/sitema_bancario.csv")
+banca = pd.read_csv("csv/sistema_bancario.csv")
 banca['fecha'] = pd.to_datetime(banca['fecha'], format='%Y-%m-%d')
 print(banca['fecha'].head()) 
 
