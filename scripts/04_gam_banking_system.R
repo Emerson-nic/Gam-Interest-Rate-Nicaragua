@@ -4,6 +4,7 @@ options(repos = c(CRAN = "https://packagemanager.posit.co/cran/2026-09-04"))
 if (!require("pacman")) install.packages("pacman")
 
 pacman::p_load(tidyverse,
+               brms, #bayesian regression models using Stan
                mgcv, #generalized additive models
                gratia, #tools for extracting smoothed and derivative functions
                nlme, #for mixed models and correlation ar(1)
@@ -25,6 +26,7 @@ if (!exists("banca")) {
 banca <- banca %>%
   mutate(ratio_morosidad_prop = ratio_morosidad_pct / 100,
          ratio_liquidez_prop = ratio_liquidez_pct / 100,
+         tasa_interes_activo = tasa_interes_activo /100, 
          d_ln_imae = d_ln_imae * 100,
          d_ln_ipc = d_ln_ipc * 100,
          mes = as.numeric(format(fecha, "%m"))
@@ -91,6 +93,8 @@ banca_ni_nombres <- c(
 dplyr::glimpse(banca_ni)
 dplyr::glimpse(banca)
 
+#readr::write_csv(banca, "csv/datos_bancario.csv")
+
 # gam models -----
 
 ## gam model 1 -----
@@ -124,5 +128,64 @@ rho_est <- stats::acf(residuos_gam, plot = TRUE)$acf[2]
 
 ## gamm model 2 ----
 
+#logit variables
 
+modelo_gamm <- gamm(
+  Morosidad ~ s(Tasa_interes_activa, Liquidez, k = 5) +
+    s(Var_ln_IMAE, k = 5) +
+    s(Var_ln_IPC, k = 5),
+  family = quasibinomial(link = "logit"),
+  correlation = corARMA(p=1, q=0),
+  method = "REML",
+  data = banca
+)
 
+summary(modelo_gamm$gam)
+
+residuos_gamm <- resid(modelo_gamm$lme, type = "normalized")
+acf(residuos_gamm, main = "ACF de Residuos Normalizados AR(1)")
+
+#nop, this nop
+
+## gam model 3 time ----
+
+modelo_gam_tiempo <- gam(Morosidad ~ s(Tasa_interes_activa, k=5) +
+                           s(Var_ln_IMAE, k=5) +
+                           s(Var_ln_IPC, k=5) +
+                           s(Tiempo, k=30) +
+                           Liquidez,
+                         family = quasibinomial(link = "logit"),
+                         data = banca, method = "REML")
+
+summary(modelo_gam_tiempo)
+
+residuos_gam_tiempo <- stats::residuals(modelo_gam_tiempo, type = "deviance")
+rho_est_tiempo <- stats::acf(residuos_gam_tiempo, plot = TRUE)$acf[2]
+
+## brm model 4 ----
+
+# set.seed(57971643)
+# modelo_bayesiano <- brm(
+#   bf(Morosidad ~ s(Tasa_interes_activa, k=5) +
+#        s(Var_ln_IMAE, k=5) +
+#        s(Var_ln_IPC, k=5) +
+#        Liquidez +
+#        ar(p=1)),
+#   data = banca,
+#   family = Beta(link = "logit"),
+#   chains = 4,
+#   cores = 4,
+#   iter = 4000,          
+#   warmup = 1000,
+#   control = list(adapt_delta = 0.95, max_treedepth = 12),
+#   seed = 123
+# )
+# 
+# summary(modelo_bayesiano)
+# 
+# plot(modelo_bayesiano)
+# 
+# pp_check(modelo_bayesiano)
+# 
+# residuos <- residuals(modelo_bayesiano, type = "pearson")
+# acf(residuos[,"Estimate"], main = "ACF residuos modelo bayesiano")
