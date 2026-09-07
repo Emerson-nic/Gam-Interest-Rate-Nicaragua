@@ -8,23 +8,19 @@ pacman::p_load(tidyverse,
                gratia, #tools for extracting smoothed and derivative functions
                nlme, #for mixed models and correlation ar(1)
                itsadug, #additional functions for gam and autocorrelation 
-               patchwork #combining charts
+               patchwork #combining charts  
 )
 
 if (!exists("banca")) {
-  if (file.exists("csv/sistema_bancario.csv")) {
+  if (file.exists("csv/banca_nicaragua_estacionarios.csv")) {
+    banca_ni <- readr::read_csv("csv/banca_nicaragua_estacionarios.csv")
     banca <- readr::read_csv("csv/sistema_bancario.csv")
   } else {
-    source("scripts/01_cleaning.R")
+    source("scripts/03_stationary_test.R")
   }
 }
 
 #select data ----
-banca <- banca %>%
-  arrange(fecha) %>%
-  mutate(tiempo = row_number())
-
-dplyr::glimpse(banca)
 
 banca <- banca %>%
   mutate(ratio_morosidad_prop = ratio_morosidad_pct / 100,
@@ -32,22 +28,25 @@ banca <- banca %>%
          d_ln_imae = d_ln_imae * 100,
          d_ln_ipc = d_ln_ipc * 100,
          mes = as.numeric(format(fecha, "%m"))
-         )
+  )
+
+banca <- banca %>%
+  arrange(fecha) %>%
+  mutate(tiempo = row_number())
 
 names(banca)
 
-banca_ni <- banca %>%
-  dplyr::select(
-    tasa_interes_activo,
-    ratio_morosidad_prop,
-    ratio_liquidez_prop,
-    d_ln_imae,
-    d_ln_ipc,
-    tiempo,
-    mes
-  )
+banca <- banca %>%
+  dplyr::select(tasa_interes_activo,
+                ratio_morosidad_prop,
+                ratio_liquidez_prop,
+                d_ln_imae,
+                d_ln_ipc,
+                tiempo,
+                mes
+                )
 
-banca_ni <- banca %>%
+banca <- banca %>%
   dplyr::rename(
     Tasa_interes_activa = tasa_interes_activo,
     Morosidad = ratio_morosidad_prop,
@@ -58,10 +57,11 @@ banca_ni <- banca %>%
     Mes = mes
   ) 
 
+
 banca_ni <- banca_ni %>%
-  dplyr::select(Tasa_interes_activa,
-                Morosidad,
-                Liquidez,
+  dplyr::select(Var_Tasa_interes_activa,
+                Var_Morosidad,
+                Var_Liquidez,
                 Var_ln_IMAE,
                 Var_ln_IPC,
                 Tiempo,
@@ -78,57 +78,51 @@ banca_nombres <- c(
   "Mes"
 )
 
+banca_ni_nombres <- c(
+  "Var. Tasa interés activa (%)",
+  "Var. Morosidad",
+  "Var. Liquidez",
+  "Var. ln IMAE",
+  "Var. ln IPC",
+  "Tiempo",
+  "Mes"
+)
+
 dplyr::glimpse(banca_ni)
+dplyr::glimpse(banca)
 
 # gam models -----
 
 ## gam model 1 -----
-modelo_banca <- gam(
-  formula = Morosidad ~ s(Tasa_interes_activa, k = 5) +
+modelo_gam <- gam(
+  Morosidad ~ s(Tasa_interes_activa, k = 5) +
     s(Var_ln_IMAE, k = 5) +
     s(Var_ln_IPC, k = 5) +
-    s(Tiempo, k = 20) + # trend
-    s(Mes, bs = "cc", k = 12) +  #seasonality
-    Liquidez,   
+  Liquidez,   
   family = quasibinomial(link = "logit"),
   method = "REML",
-  data = banca_ni
+  data = banca
 )
 
 #note: a high k value allows the curve to become very wavy and capture 
 #sharp peaks, while a low k value forces it to be a simple curve or nearly 
 #a straight line
 
-summary(modelo_banca)
+summary(modelo_gam)
+
+mgcv::concurvity(modelo_gam, full = FALSE)
 
 #k > 0.05, the degrees of freedom are adequate
-gam.check(modelo_banca)
+mgcv::gam.check(modelo_gam)
 
-draw(modelo_banca, residuals = TRUE)
+gratia::draw(modelo_gam, residuals = TRUE)
 
-plot(modelo_banca, pages = 1, shade = TRUE, residuals = TRUE)
+plot(modelo_gam, pages = 1, shade = TRUE, residuals = TRUE)
 
-residuos_gam <- residuals(modelo_banca, type = "deviance")
-rho_est <- acf(residuos_gam, plot = TRUE)$acf[2]
-rho_est
+residuos_gam <- stats::residuals(modelo_gam, type = "deviance")
+rho_est <- stats::acf(residuos_gam, plot = TRUE)$acf[2]
 
-## gam model 2 ----
+## gamm model 2 ----
 
-modelo_bam_ar1 <- bam(
-  Morosidad ~ s(Tasa_interes_activa, k = 5) +
-    s(Var_ln_IMAE, k = 5) +
-    s(Var_ln_IPC, k = 5) +
-    s(Tiempo, k = 20) +
-    s(Mes, bs = "cc", k = 12) +
-    Liquidez,
-  family = quasibinomial(link = "logit"),
-  method = "fREML",
-  rho = rho_est,
-  data = banca_ni
-)
 
-summary(modelo_bam_ar1)
-gam.check(modelo_bam_ar1)
 
-residuos_bam <- residuals(modelo_bam_ar1, type = "deviance")
-acf(residuos_bam, main = "acf residuos ar(1)")
