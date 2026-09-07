@@ -48,4 +48,4 @@ Desde el 2008:
 
 ## Pregunta de la investivacion
 
-Hasta qué nivel máximo puede subir la tasa de interés sin que la tasa de morosidad se dispare de manera exponencial?
+Cómo un cambio mensual en la tasa afecta el cambio mensual en la morosidad?
