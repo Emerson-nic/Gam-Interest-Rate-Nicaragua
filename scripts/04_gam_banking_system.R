@@ -4,6 +4,7 @@ options(repos = c(CRAN = "https://packagemanager.posit.co/cran/2026-09-04"))
 if (!require("pacman")) install.packages("pacman")
 
 pacman::p_load(tidyverse,
+               lmtest, #normality and heteroscedasticity tests 
                brms, #bayesian regression models using Stan
                mgcv, #generalized additive models
                gratia, #tools for extracting smoothed and derivative functions
@@ -15,7 +16,7 @@ pacman::p_load(tidyverse,
 if (!exists("banca")) {
   if (file.exists("csv/banca_nicaragua_estacionarios.csv")) {
     banca_ni <- readr::read_csv("csv/banca_nicaragua_estacionarios.csv")
-    banca <- readr::read_csv("csv/sistema_bancario.csv")
+    banca <- readr::read_csv("csv/datos_bancario.csv")
   } else {
     source("scripts/03_stationary_test.R")
   }
@@ -24,28 +25,17 @@ if (!exists("banca")) {
 #select data ----
 
 banca <- banca %>%
-  mutate(ratio_morosidad_prop = ratio_morosidad_pct / 100,
-         ratio_liquidez_prop = ratio_liquidez_pct / 100,
-         tasa_interes_activo = tasa_interes_activo /100, 
-         d_ln_imae = d_ln_imae * 100,
-         d_ln_ipc = d_ln_ipc * 100,
-         mes = as.numeric(format(fecha, "%m"))
-  )
-
-banca <- banca %>%
-  arrange(fecha) %>%
-  mutate(tiempo = row_number())
-
-names(banca)
-
-banca <- banca %>%
   dplyr::select(tasa_interes_activo,
                 ratio_morosidad_prop,
                 ratio_liquidez_prop,
                 d_ln_imae,
                 d_ln_ipc,
                 tiempo,
-                mes
+                mes,
+                tasa_interes_activo_real,
+                crisis_2008,
+                crisis_2018,
+                crisis_covid
                 )
 
 banca <- banca %>%
@@ -56,7 +46,11 @@ banca <- banca %>%
     Var_ln_IMAE = d_ln_imae,
     Var_ln_IPC = d_ln_ipc,
     Tiempo = tiempo,
-    Mes = mes
+    Mes = mes,
+    Tasa_interes_activa_real = tasa_interes_activo_real,
+    Crisis_2008 = crisis_2008,
+    Crisis_2018 = crisis_2018,
+    Crisis_covid = crisis_covid
   ) 
 
 
@@ -77,7 +71,8 @@ banca_nombres <- c(
   "Var. ln IMAE",
   "Var. ln IPC",
   "Tiempo",
-  "Mes"
+  "Mes",
+  "Tasa interés activa real (%)"
 )
 
 banca_ni_nombres <- c(
@@ -93,7 +88,11 @@ banca_ni_nombres <- c(
 dplyr::glimpse(banca_ni)
 dplyr::glimpse(banca)
 
-#readr::write_csv(banca, "csv/datos_bancario.csv")
+banca %>% dplyr::select(Tasa_interes_activa, Tasa_interes_activa_real,
+                        Var_ln_IPC) %>%
+  tibble::as_tibble() %>%
+  print(n=300)
+
 
 # gam models -----
 
@@ -127,8 +126,6 @@ residuos_gam <- stats::residuals(modelo_gam, type = "deviance")
 rho_est <- stats::acf(residuos_gam, plot = TRUE)$acf[2]
 
 ## gamm model 2 ----
-
-#logit variables
 
 modelo_gamm <- gamm(
   Morosidad ~ s(Tasa_interes_activa, Liquidez, k = 5) +
@@ -189,3 +186,163 @@ rho_est_tiempo <- stats::acf(residuos_gam_tiempo, plot = TRUE)$acf[2]
 # 
 # residuos <- residuals(modelo_bayesiano, type = "pearson")
 # acf(residuos[,"Estimate"], main = "ACF residuos modelo bayesiano")
+
+
+## gamm model 5 ----
+
+modelo_dummies <- gamm(
+  Morosidad ~ s(Tasa_interes_activa_real, k=4) +
+    s(Var_ln_IMAE, k=4) +
+    s(Liquidez, k=4) +
+    Crisis_2018 + 
+    Crisis_covid,
+  correlation = corARMA(p=1, q=0, form = ~ Tiempo),
+  method = "REML",
+  data = banca
+)
+summary(modelo_dummies$gam)
+
+
+residuos_dummies <- resid(modelo_dummies$lme, type = "normalized")
+acf(residuos_dummies, main = "ACF residuos GAMM")
+
+mgcv::concurvity(modelo_dummies$gam, full = FALSE)
+
+## gamm model 6  ----
+
+modelo_gamm_real <- gamm(
+  Morosidad ~ s(Tasa_interes_activa_real, k = 5) +
+    s(Var_ln_IMAE, k = 5) +
+    s(Liquidez, k=5),
+  correlation = corARMA(p = 1, q = 0),
+  method = "REML",
+  data = banca
+)
+
+summary(modelo_gamm_real$gam)
+
+residuos_gamm_real <- resid(modelo_gamm_real$lme, type = "normalized")
+acf(residuos_gamm_real, main = "ACF de Residuos Normalizados AR(1)")
+
+gratia::draw(modelo_gamm_real$gam, select = "s(Liquidez)", residuals = TRUE)
+
+## gamm model 7 ----
+
+modelo_inter <- gamm(
+  Morosidad ~ te(Liquidez, Var_ln_IMAE, k=5) +
+    s(Tasa_interes_activa_real, k=4),
+  correlation = corARMA(p=1, q=0),
+  method = "REML",
+  data = banca
+)
+
+summary(modelo_inter$gam)
+
+residuos_inter <- resid(modelo_inter$lme, type = "normalized")
+acf(residuos_inter, main = "ACF residuos GAMM")
+
+mgcv::concurvity(modelo_inter$gam, full = FALSE)
+
+gratia::draw(modelo_inter$gam, select = "te(Liquidez,Var_ln_IMAE)", residuals = TRUE)
+
+## gamm model 8 ----
+
+modelo_inter_tasa <- gamm(
+  Morosidad ~ te(Liquidez, Tasa_interes_activa_real, k = 5) +
+    s(Var_ln_IMAE, k = 5),
+  correlation = corARMA(p = 1, q = 0),
+  method = "REML",
+  data = banca
+)
+
+summary(modelo_inter_tasa$gam)
+
+residuos_inter_tasa <- resid(modelo_inter_tasa$lme, type = "normalized")
+acf(residuos_inter_tasa, main = "ACF residuos GAMM")
+
+mgcv::concurvity(modelo_inter_tasa$gam, full = FALSE)
+
+gratia::draw(modelo_inter_tasa$gam, select = "te(Liquidez,Tasa_interes_activa_real)", residuals = TRUE)
+
+summary(modelo_inter_tasa$lme)$modelStruct$corStruct
+tseries::adf.test(residuos_inter_tasa)
+
+## gamm model 9 winner ----
+
+modelo_inter_dos <- gamm(
+  Morosidad ~ te(Liquidez, Tasa_interes_activa_real,Var_ln_IMAE, k = 5),
+  family = quasibinomial(link = "logit"),
+  correlation = corARMA(p = 1, q = 0),
+  method = "REML",
+  data = banca
+)
+
+summary(modelo_inter_dos)
+summary(modelo_inter_dos$gam)
+#summary(modelo_inter_dos$lme)
+
+# mgcv::gam.check(modelo_inter_dos$gam)
+#about k check test the p-value is false
+#modelo_inter_dos has k=5x5x5=125 available parameters but the edf choose k=14.5 
+
+residuos_inter_dos <- resid(modelo_inter_dos $lme, type = "normalized")
+valores_ajustados_inter_dos <- fitted(modelo_inter_dos$gam)
+
+#h0: the distribution of the residuals is normal
+stats::shapiro.test(residuos_inter_dos)
+#h0: the variance of the residuals is constant
+lmtest::bptest(residuos_inter_dos~ valores_ajustados_inter_dos)
+
+acf(residuos_inter_dos, main = "ACF residuos GAMM")
+
+mgcv::concurvity(modelo_inter_dos$gam, full = FALSE)
+
+gratia::draw(modelo_inter_dos$gam, select = "te(Liquidez,Tasa_interes_activa_real,Var_ln_IMAE)", residuals = TRUE)
+
+summary(modelo_inter_dos$lme)$modelStruct$corStruct
+tseries::adf.test(residuos_inter_dos)
+
+
+
+# simulation ----
+
+#create a massive grid simulating 50x50x50 possible combinations  
+#within the Bank of Nicaragua's historical range
+cuadricula <- expand.grid(
+  Liquidez = seq(min(banca$Liquidez, na.rm = TRUE), max(banca$Liquidez, na.rm = TRUE), length.out = 50),
+  Tasa_interes_activa_real = seq(min(banca$Tasa_interes_activa_real, na.rm = TRUE), max(banca$Tasa_interes_activa_real, na.rm = TRUE), length.out = 50),
+  Var_ln_IMAE = seq(min(banca$Var_ln_IMAE, na.rm = TRUE), max(banca$Var_ln_IMAE, na.rm = TRUE), length.out = 50)
+)
+
+#gam predicts the expected delinquency for each cross-section
+cuadricula$Morosidad_Proyectada <- predict(modelo_inter_dos$gam, newdata = cuadricula)
+
+#take the lowest delinquency rate 
+escenario_optimo <- cuadricula[which.min(cuadricula$Morosidad_Proyectada), ]
+
+print(escenario_optimo)
+
+#save csv 
+
+names(cuadricula)
+
+escenarios_nombres <- c(
+  "Liquidez (prop.)",
+  "Tasa interés activa real (%)",
+  "Var. ln IMAE",
+  "Morosidad proyectada (prop.)"
+)
+
+cuadricula <- cuadricula %>%
+  dplyr::rename(
+    "Liquidez (prop.)" = Liquidez,
+    "Tasa interés activa real (%)" = Tasa_interes_activa_real,
+    "Var. ln IMAE" = Var_ln_IMAE,
+    "Morosidad proyectada (prop.)" = Morosidad_Proyectada   
+  )
+
+cuadricula <- cuadricula * 100
+
+readr::write_csv(cuadricula, "csv/estimacion_morosidad.csv")
+
+
