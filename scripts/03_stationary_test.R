@@ -52,16 +52,6 @@ banca_ni <- banca_ni %>%
                 Mes
   )
 
-banca_nombres <- c(
-  "Tasa interés activa (%)",
-  "Morosidad (prop.)",
-  "Liquidez (prop.)",
-  "Var. ln IMAE",
-  "Var. ln IPC",
-  "Tiempo",
-  "Mes"
-)
-
 dplyr::glimpse(banca_ni)
 
 
@@ -138,4 +128,51 @@ dplyr::glimpse(banca_ni)
 #save csv
 readr::write_csv(banca_ni, "csv/banca_nicaragua_estacionarios.csv")
 
+#dummies ----
+
+names(banca)
+
+banca <- banca %>%
+  dplyr::mutate(ratio_morosidad_prop = ratio_morosidad_pct / 100,
+                ratio_liquidez_prop = ratio_liquidez_pct / 100,
+                tasa_interes_activo = tasa_interes_activo /100,
+                d_ln_imae = d_ln_imae / 100,
+                d_ln_ipc = d_ln_ipc / 100,
+                mes = as.numeric(format(fecha, "%m"))
+  )
+
+banca <- banca %>%
+  dplyr::mutate(
+    tasa_interes_activo_real = tasa_interes_activo - d_ln_ipc
+  )
+
+banca <- banca %>%
+  arrange(fecha) %>%
+  dplyr::mutate(tiempo = row_number())
+
+banca <- banca %>%
+  dplyr::select(fecha,
+                tasa_interes_activo,
+                ratio_morosidad_prop,
+                ratio_liquidez_prop,
+                d_ln_imae,
+                d_ln_ipc,
+                tiempo,
+                mes,
+                tasa_interes_activo_real
+                )
+
+banca %>% tibble::as_tibble() %>%
+  print(n=300)
+
+banca <- banca %>%
+  mutate(
+    crisis_2008 = ifelse(fecha >= as.Date("2008-04-01") & fecha <= as.Date("2010-12-01"), 1, 0),
+    crisis_2018 = ifelse(fecha >= as.Date("2018-05-01") & fecha <= as.Date("2019-12-01"), 1, 0),
+    crisis_covid = ifelse(fecha >= as.Date("2020-01-01") & fecha <= as.Date("2021-12-01"), 1, 0)
+  )
+
+readr::write_csv(banca, "csv/datos_bancario.csv")
+
 rm(list = ls())
+
