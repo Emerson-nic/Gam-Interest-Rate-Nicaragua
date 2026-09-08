@@ -259,7 +259,7 @@ summary(modelo_inter_tasa$gam)
 
 residuos_inter_tasa <- resid(modelo_inter_tasa$lme, type = "normalized")
 acf(residuos_inter_tasa, main = "ACF residuos GAMM")
-
+# 
 mgcv::concurvity(modelo_inter_tasa$gam, full = FALSE)
 
 gratia::draw(modelo_inter_tasa$gam, select = "te(Liquidez,Tasa_interes_activa_real)", residuals = TRUE)
