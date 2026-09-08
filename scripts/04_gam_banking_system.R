@@ -97,7 +97,7 @@ banca %>% dplyr::select(Tasa_interes_activa, Tasa_interes_activa_real,
 # gam models -----
 
 ## gam model 1 -----
-modelo_gam <- gam(
+modelo_gam <- mgcv::gam(
   Morosidad ~ s(Tasa_interes_activa, k = 5) +
     s(Var_ln_IMAE, k = 5) +
     s(Var_ln_IPC, k = 5) +
@@ -127,7 +127,7 @@ rho_est <- stats::acf(residuos_gam, plot = TRUE)$acf[2]
 
 ## gamm model 2 ----
 
-modelo_gamm <- gamm(
+modelo_gamm <- mgcv::gamm(
   Morosidad ~ s(Tasa_interes_activa, Liquidez, k = 5) +
     s(Var_ln_IMAE, k = 5) +
     s(Var_ln_IPC, k = 5),
@@ -190,7 +190,7 @@ rho_est_tiempo <- stats::acf(residuos_gam_tiempo, plot = TRUE)$acf[2]
 
 ## gamm model 5 ----
 
-modelo_dummies <- gamm(
+modelo_dummies <- mgcv::gamm(
   Morosidad ~ s(Tasa_interes_activa_real, k=4) +
     s(Var_ln_IMAE, k=4) +
     s(Liquidez, k=4) +
@@ -210,7 +210,7 @@ mgcv::concurvity(modelo_dummies$gam, full = FALSE)
 
 ## gamm model 6  ----
 
-modelo_gamm_real <- gamm(
+modelo_gamm_real <- mgcv::gamm(
   Morosidad ~ s(Tasa_interes_activa_real, k = 5) +
     s(Var_ln_IMAE, k = 5) +
     s(Liquidez, k=5),
@@ -228,7 +228,7 @@ gratia::draw(modelo_gamm_real$gam, select = "s(Liquidez)", residuals = TRUE)
 
 ## gamm model 7 ----
 
-modelo_inter <- gamm(
+modelo_inter <- mgcv::gamm(
   Morosidad ~ te(Liquidez, Var_ln_IMAE, k=5) +
     s(Tasa_interes_activa_real, k=4),
   correlation = corARMA(p=1, q=0),
@@ -247,7 +247,7 @@ gratia::draw(modelo_inter$gam, select = "te(Liquidez,Var_ln_IMAE)", residuals = 
 
 ## gamm model 8 ----
 
-modelo_inter_tasa <- gamm(
+modelo_inter_tasa <- mgcv::gamm(
   Morosidad ~ te(Liquidez, Tasa_interes_activa_real, k = 5) +
     s(Var_ln_IMAE, k = 5),
   correlation = corARMA(p = 1, q = 0),
@@ -259,7 +259,7 @@ summary(modelo_inter_tasa$gam)
 
 residuos_inter_tasa <- resid(modelo_inter_tasa$lme, type = "normalized")
 acf(residuos_inter_tasa, main = "ACF residuos GAMM")
-# 
+
 mgcv::concurvity(modelo_inter_tasa$gam, full = FALSE)
 
 gratia::draw(modelo_inter_tasa$gam, select = "te(Liquidez,Tasa_interes_activa_real)", residuals = TRUE)
@@ -267,11 +267,11 @@ gratia::draw(modelo_inter_tasa$gam, select = "te(Liquidez,Tasa_interes_activa_re
 summary(modelo_inter_tasa$lme)$modelStruct$corStruct
 tseries::adf.test(residuos_inter_tasa)
 
-## gamm model 9 winner ----
+## gamm model 9 ----
 
-modelo_inter_dos <- gamm(
+modelo_inter_dos <- mgcv::gamm(
   Morosidad ~ te(Liquidez, Tasa_interes_activa_real,Var_ln_IMAE, k = 5),
-  family = quasibinomial(link = "logit"),
+  # family = quasibinomial(link = "logit"),
   correlation = corARMA(p = 1, q = 0),
   method = "REML",
   data = banca
@@ -345,4 +345,81 @@ cuadricula <- cuadricula * 100
 
 readr::write_csv(cuadricula, "csv/estimacion_morosidad.csv")
 
+## gamm model 10 ----
 
+names(banca_ni)
+
+modelo_inter_dos_estacionario <- mgcv::gamm(
+Var_Morosidad ~ te(Var_Liquidez, Var_Tasa_interes_activa,
+               Var_ln_IMAE, k = 5),
+# family = scat(link = "identity"),
+# correlation = corARMA(p = 1, q = 0),
+method = "REML",
+data = banca_ni
+)
+
+summary(modelo_inter_dos_estacionario)
+summary(modelo_inter_dos_estacionario$gam)
+#summary(modelo_inter_dos_estacionario$lme)
+
+mgcv::gam.check(modelo_inter_dos_estacionario$gam)
+
+residuos_inter_dos_estacionario <- resid(modelo_inter_dos_estacionario$lme, type = "normalized")
+valores_ajustados_inter_dos_estacionario <- fitted(modelo_inter_dos_estacionario$gam)
+
+#h0: the distribution of the residuals is normal
+stats::shapiro.test(residuos_inter_dos_estacionario)
+#h0: the variance of the residuals is constant
+lmtest::bptest(residuos_inter_dos_estacionario~ valores_ajustados_inter_dos_estacionario)
+
+acf(residuos_inter_dos_estacionario, main = "ACF residuos GAMM")
+
+mgcv::concurvity(modelo_inter_dos_estacionario$gam, full = FALSE)
+
+gratia::draw(modelo_inter_dos_estacionario$gam, select = "te(Var_Liquidez,Var_Tasa_interes_activa,Var_ln_IMAE)", residuals = TRUE)
+
+summary(modelo_inter_dos_estacionario$lme)$modelStruct$corStruct
+tseries::adf.test(residuos_inter_dos_estacionario)
+
+## gamm modelo 11 ----
+
+modelo_comparacion <- mgcv::gamm(
+  Var_Morosidad ~ te(Var_Liquidez, Var_Tasa_interes_activa, k = 5) +
+    s(Var_ln_IMAE, k = 5),
+  # family = mgcv::scat(link = "identity"),
+  method = "REML",
+  data = banca_ni
+)
+
+summary(modelo_comparacion$gam)
+
+AIC(modelo_inter_dos_estacionario$lme, modelo_comparacion$lme)
+
+## gam modelo 12 ----
+
+modelo_scat <-mgcv::gam(
+  Var_Morosidad ~ te(Var_Liquidez, Var_Tasa_interes_activa, k = 5) +
+    s(Var_ln_IMAE, k = 5),
+  family = mgcv::scat(link = "identity"),
+  method = "REML",
+  data = banca_ni
+)
+summary(modelo_scat)
+gam.check(modelo_scat)
+shapiro.test(residuals(modelo_scat, type = "deviance"))
+acf(residuals(modelo_scat, type = "deviance"))
+
+## gam modelo 13 ----
+
+modelo_scat_inter_3 <-mgcv::gam(
+  Var_Morosidad ~ te(Var_Liquidez, Var_Tasa_interes_activa, Var_ln_IMAE, k = 5),
+    #s(Var_ln_IMAE, k = 5),
+  family = mgcv::scat(link = "identity"),
+  method = "REML",
+  data = banca_ni
+)
+
+summary(modelo_scat_inter_3)
+gam.check(modelo_scat_inter_3)
+shapiro.test(residuals(modelo_scat_inter_3, type = "deviance"))
+acf(residuals(modelo_scat_inter_3, type = "deviance"), main ="ACF residuos GAM, Type = 'deviance'")
