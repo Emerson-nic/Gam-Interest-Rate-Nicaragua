@@ -270,3 +270,5 @@ banca <- banca %>%
   dplyr::select(-tasa_implicita_pct)
 
 readr::write_csv(banca, "csv/sistema_bancario.csv")
+
+rm(list = ls())

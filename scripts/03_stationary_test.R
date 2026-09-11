@@ -43,7 +43,8 @@ banca_ni <- banca %>%
   ) 
 
 banca_ni <- banca_ni %>%
-  dplyr::select(Tasa_interes_activa,
+  dplyr::select(fecha,
+                Tasa_interes_activa,
                 Morosidad,
                 Liquidez,
                 Var_ln_IMAE,
