@@ -302,49 +302,6 @@ gratia::draw(modelo_inter_dos$gam, select = "te(Liquidez,Tasa_interes_activa_rea
 summary(modelo_inter_dos$lme)$modelStruct$corStruct
 tseries::adf.test(residuos_inter_dos)
 
-
-
-# simulation ----
-
-#create a massive grid simulating 50x50x50 possible combinations  
-#within the Bank of Nicaragua's historical range
-cuadricula <- expand.grid(
-  Liquidez = seq(min(banca$Liquidez, na.rm = TRUE), max(banca$Liquidez, na.rm = TRUE), length.out = 50),
-  Tasa_interes_activa_real = seq(min(banca$Tasa_interes_activa_real, na.rm = TRUE), max(banca$Tasa_interes_activa_real, na.rm = TRUE), length.out = 50),
-  Var_ln_IMAE = seq(min(banca$Var_ln_IMAE, na.rm = TRUE), max(banca$Var_ln_IMAE, na.rm = TRUE), length.out = 50)
-)
-
-#gam predicts the expected delinquency for each cross-section
-cuadricula$Morosidad_Proyectada <- predict(modelo_inter_dos$gam, newdata = cuadricula)
-
-#take the lowest delinquency rate 
-escenario_optimo <- cuadricula[which.min(cuadricula$Morosidad_Proyectada), ]
-
-print(escenario_optimo)
-
-#save csv 
-
-names(cuadricula)
-
-escenarios_nombres <- c(
-  "Liquidez (prop.)",
-  "Tasa interés activa real (%)",
-  "Var. ln IMAE",
-  "Morosidad proyectada (prop.)"
-)
-
-cuadricula <- cuadricula %>%
-  dplyr::rename(
-    "Liquidez (prop.)" = Liquidez,
-    "Tasa interés activa real (%)" = Tasa_interes_activa_real,
-    "Var. ln IMAE" = Var_ln_IMAE,
-    "Morosidad proyectada (prop.)" = Morosidad_Proyectada   
-  )
-
-cuadricula <- cuadricula * 100
-
-readr::write_csv(cuadricula, "csv/estimacion_morosidad.csv")
-
 ## gamm model 10 ----
 
 names(banca_ni)
@@ -423,3 +380,5 @@ summary(modelo_scat_inter_3)
 gam.check(modelo_scat_inter_3)
 shapiro.test(residuals(modelo_scat_inter_3, type = "deviance"))
 acf(residuals(modelo_scat_inter_3, type = "deviance"), main ="ACF residuos GAM, Type = 'deviance'")
+
+rm(list = ls())
