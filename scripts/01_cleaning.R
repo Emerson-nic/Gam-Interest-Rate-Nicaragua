@@ -82,6 +82,77 @@ tasa_interes <- tasa_interes %>%
 
 tibble::as_tibble(tasa_interes)
 
+#load itcer
+itcer <- readr::read_csv("dataset/Tipo de cambio de mercado.csv",
+                         skip=6)
+
+colnames(itcer)[1] <- "fecha"
+
+itcer <- itcer %>%
+  dplyr::rename(itcer = "ITCER con USA")
+
+itcer <- itcer %>%
+  dplyr::mutate(fecha = as.Date(fecha, format = "%d-%m-%Y"))
+
+itcer <- itcer %>%
+  dplyr::mutate(
+    ln_itcer = log(itcer),
+    d_ln_itcer = ln_itcer - dplyr::lag(ln_itcer, 12)
+  ) %>%
+  dplyr::select(-itcer, -ln_itcer) %>%
+  stats::na.omit()
+
+tibble::as_tibble(itcer)
+
+#load FOB exports
+fob <- readr::read_csv("dataset/Exportaciones FOB.csv",
+                         skip=6)
+
+colnames(fob)[1] <- "fecha"
+
+fob <- fob %>%
+  dplyr::rename(cafe_millones_quitales = "Café precio promedio de exportación",
+                banano_millones_toneladas = "Banano precio promedio de exportación",
+                azucar_millones_kilogramos = "Azúcar precio promedio de exportación")
+
+fob <- fob %>%
+  dplyr::mutate(fecha = as.Date(fecha, format = "%d-%m-%Y"))
+
+fob %>%
+  dplyr::select(azucar_millones_kilogramos) %>%
+  tibble::as_tibble() %>%
+  print(n=300)
+
+#interpolate sugar
+
+fob <- fob %>%
+  dplyr::mutate(
+    azucar_millones_kilogramos = as.numeric(na_if(azucar_millones_kilogramos, "--"))
+  )
+
+fob <- fob %>%
+  dplyr::mutate(
+    #interpolate by connecting the last observation with the next one
+    azucar_millones_kilogramos = zoo::na.approx(azucar_millones_kilogramos, na.rm=F)
+  ) %>%
+  stats::na.omit()
+
+
+fob <- fob %>%
+  dplyr::mutate(
+    ln_cafe_millones_quitales = log(cafe_millones_quitales),
+    ln_banano_millones_toneladas = log(banano_millones_toneladas),
+    ln_azucar_millones_kilogramos = log(azucar_millones_kilogramos),
+    d_ln_cafe_millones_quitales = ln_cafe_millones_quitales - dplyr::lag(ln_cafe_millones_quitales, 12),
+    d_ln_banano_millones_toneladas = ln_banano_millones_toneladas - dplyr::lag(ln_banano_millones_toneladas, 12),
+    d_ln_azucar_millones_kilogramos = ln_azucar_millones_kilogramos - dplyr::lag(ln_azucar_millones_kilogramos, 12)
+  ) %>%
+  dplyr::select(-cafe_millones_quitales, -ln_cafe_millones_quitales,
+                -banano_millones_toneladas, -ln_banano_millones_toneladas,
+                -azucar_millones_kilogramos, -ln_azucar_millones_kilogramos) %>%
+  stats::na.omit()
+
+tibble::as_tibble(fob)
 
 #load xlsx ----
 
@@ -148,21 +219,8 @@ names(resultados_2008)
 
 #pre-2018 data
 
-ingresos_2008 <- resultados_2008 %>%
-  dplyr::select(fecha, ingresos_financieros_por_cartera_de_creditos) %>%
-  dplyr::arrange(fecha) %>%
-  dplyr::mutate(
-    mes = lubridate::month(fecha),
-    ingresos_mes = dplyr::if_else(
-      mes == 1,
-      ingresos_financieros_por_cartera_de_creditos,
-      ingresos_financieros_por_cartera_de_creditos - dplyr::lag(ingresos_financieros_por_cartera_de_creditos)
-    )
-  ) %>%
-  dplyr::select(fecha, ingresos_mes)
 
 banco_2008_clean <- banco_2008 %>%
-  dplyr::inner_join(ingresos_2008, by = "fecha") %>%
   dplyr::arrange(fecha) %>%
   dplyr::mutate(
     disponibilidades_total = disponibilidades,
@@ -170,28 +228,13 @@ banco_2008_clean <- banco_2008 %>%
     ratio_liquidez = disponibilidades_total / depositos_totales,
     cartera_mora = creditos_vencidos + creditos_en_cobro_judicial,
     cartera_bruta = cartera_de_creditos_neta + provisiones_por_incobrabilidad_de_cartera_de_creditos,
-    ratio_morosidad = cartera_mora / cartera_bruta,
-    tasa_implicita = (ingresos_mes * 12) / ((cartera_bruta + dplyr::lag(cartera_bruta)) / 2)
+    ratio_morosidad = cartera_mora / cartera_bruta
   ) %>%
-  dplyr::select(fecha, ratio_liquidez, ratio_morosidad, tasa_implicita)
+  dplyr::select(fecha, ratio_liquidez, ratio_morosidad)
 
 #post-2019 data 
 
-ingresos_2019 <- resultados_2019 %>%
-  dplyr::select(fecha, ingresos_financieros_por_cartera_de_creditos) %>%
-  dplyr::arrange(fecha) %>%
-  dplyr::mutate(
-    mes = lubridate::month(fecha),
-    ingresos_mes = dplyr::if_else(
-      mes == 1,
-      ingresos_financieros_por_cartera_de_creditos,
-      ingresos_financieros_por_cartera_de_creditos - dplyr::lag(ingresos_financieros_por_cartera_de_creditos)
-    )
-  ) %>%
-  dplyr::select(fecha, ingresos_mes)
-
 banco_2019_clean <- banco_2019 %>%
-  dplyr::inner_join(ingresos_2019, by = "fecha") %>%
   dplyr::arrange(fecha) %>%
   dplyr::mutate(
     disponibilidades_total = efectivo_y_equivalentes_de_efectivo,
@@ -199,10 +242,9 @@ banco_2019_clean <- banco_2019 %>%
     ratio_liquidez = disponibilidades_total / depositos_totales,
     cartera_mora = vencidos + cobro_judicial,
     cartera_bruta = cartera_de_creditos_neta + provision_de_cartera_de_creditos,
-    ratio_morosidad = cartera_mora / cartera_bruta,
-    tasa_implicita = (ingresos_mes * 12) / ((cartera_bruta + dplyr::lag(cartera_bruta)) / 2)
+    ratio_morosidad = cartera_mora / cartera_bruta
   ) %>%
-  dplyr::select(fecha, ratio_liquidez, ratio_morosidad, tasa_implicita)
+  dplyr::select(fecha, ratio_liquidez, ratio_morosidad)
 
 #merging both periods 
 datos_bancarios <- dplyr::bind_rows(banco_2008_clean, banco_2019_clean) %>%
@@ -212,11 +254,26 @@ datos_bancarios <- dplyr::bind_rows(banco_2008_clean, banco_2019_clean) %>%
 
 tibble::as_tibble(datos_bancarios)
 
-  #merging all variables ----
+#active inss insured persons
+
+inss <- readxl::read_xls("dataset/3-1.xls", sheet = "3-1", 
+                   range = "A15:M352", col_names = FALSE)
+
+#rename the first and last one columns
+colnames(inss)[1] <- "fecha"
+colnames(inss)[13] <- "asegurados_inss"
+
+inss <- inss %>%
+  dplyr::select(
+    fecha, asegurados_inss
+    )
+
+#merging all variables ----
 
 banca <- datos_bancarios %>%
-  dplyr::select(fecha, ratio_liquidez, ratio_morosidad, tasa_implicita) %>%
+  dplyr::select(fecha, ratio_liquidez, ratio_morosidad) %>%
   dplyr::inner_join(imae, by = "fecha") %>%
+  dplyr::inner_join(itcer, by = "fecha") %>%
   dplyr::inner_join(ipc, by = "fecha") %>%
   dplyr::inner_join(tasa_interes, by = "fecha") %>%
   dplyr::arrange(fecha)
@@ -225,11 +282,9 @@ tibble::as_tibble(banca)
 
 banca <- banca %>%
   dplyr::mutate(
-    tasa_implicita_pct = tasa_implicita * 100,
-    ratio_morosidad_pct = ratio_morosidad * 100,
-    ratio_liquidez_pct = ratio_liquidez * 100
+    tasa_interes_activo = tasa_interes_activo / 100,
   ) %>%
-  dplyr::select(fecha, tasa_interes_activo, tasa_implicita_pct, ratio_morosidad_pct, ratio_liquidez_pct, dplyr::everything())
+  dplyr::select(fecha, ratio_morosidad, ratio_liquidez, d_ln_imae, dplyr::everything())
 
 banca <- banca %>%
   stats::na.omit()
@@ -237,37 +292,9 @@ banca <- banca %>%
 tibble::as_tibble(banca)
 
 banca %>% 
-  dplyr::select(tasa_interes_activo, tasa_implicita_pct) %>% 
+  dplyr::select(tasa_interes_activo) %>% 
   tibble::as_tibble() %>%
   print(n = 300)
-
-#smoothed interest rate  (outliers) ----
-
-names(banca)
-
-banca <- banca %>%
-  dplyr::select(-tasa_implicita, -ratio_morosidad, -ratio_liquidez) 
-
-names(banca)
-  
-banca <- banca %>%
-  dplyr::mutate(
-    #apply the quarterly moving average (3 months) only to the implicit rate
-    tasa_implicita_pct_clean = zoo::rollmean(tasa_implicita_pct, k = 3, fill = NA, align = "right")
-  ) %>%
-  tibble::as_tibble() %>%
-  print(n = 100)
-
-banca %>%
-  dplyr::select(tasa_implicita_pct_clean, tasa_implicita_pct, tasa_interes_activo) %>%
-  tibble::as_tibble() %>%
-  print(n = 100)
-
-banca <- banca %>%
-  stats::na.omit()
-
-banca <- banca %>%
-  dplyr::select(-tasa_implicita_pct)
 
 readr::write_csv(banca, "csv/sistema_bancario.csv")
 

@@ -18,9 +18,7 @@ if (!exists("banca")) {
 #select data ----
 
 banca <- banca %>%
-  mutate(ratio_morosidad_prop = ratio_morosidad_pct / 100,
-         ratio_liquidez_prop = ratio_liquidez_pct / 100,
-         d_ln_imae = d_ln_imae * 100,
+  mutate(d_ln_imae = d_ln_imae * 100,
          d_ln_ipc = d_ln_ipc * 100,
          mes = as.numeric(format(fecha, "%m"))
          )
