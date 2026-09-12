@@ -1,16 +1,12 @@
 ## Variables
 
-1.  Tasa de interés activa nominal en MN o
+1.  Tasa de interés activa nominal en MN
 
-2.  $\text{Tasa de interés implícita}_{it}$: $\frac{\text{Ingresos del mes} \times 12}{(\text{Cartera}_t + \text{Cartera}_{t-1}) / 2}$
+2.  $\text{Ratio de morosidad}_{it}$: $\frac{\text{Vencidos}_{it} + \text{Cobro Judicial}_{it}}{\text{Cartera de Créditos Neta}_{it} + \text{Provisión de Cartera}_{it}}$
 
-donde se aplico una desacumulación de ingreso financiero:
+3.  $\text{Crecimiento IMAE}_t$: $\ln(\text{IMAE}_t) - \ln(\text{IMAE}_{t-12})$
 
-$$\text{Ingresos del Mes}_{t} = \begin{cases} \text{Ingresos Acumulados}_{t} & \text{si Mes} = 1 \\ \text{Ingresos Acumulados}_{t} - \text{Ingresos Acumulados}_{t-1} & \text{si Mes} > 1 \end{cases}$$
-
-3.  $\text{Ratio de morosidad}_{it}$: $\frac{\text{Vencidos}_{it} + \text{Cobro Judicial}_{it}}{\text{Cartera de Créditos Neta}_{it} + \text{Provisión de Cartera}_{it}}$
-
-4.  $\text{Crecimiento IMAE}_t$: $\ln(\text{IMAE}_t) - \ln(\text{IMAE}_{t-12})$
+4.  $\text{Crecimiento ITCER}_t$: $\ln(\text{ITCER}_t) - \ln(\text{ITCER}_{t-12})$
 
 5.  $\text{Inflación}_t$: $\ln(\text{IPC}_t) - \ln(\text{IPC}_{t-12})$
 
@@ -29,6 +25,8 @@ Tasa de interés activa nominal en MN de [SECMCA](https://www.secmca.org/chart/?
 - MN: Moneda Nacional
 
 IMAE obtenido de [SECMCA](https://www.secmca.org/chart/?parent=Producci%C3%B3n&son=%C3%8Dndice+Mensual+de+la+Actividad+Econ%C3%B3mica&url=11%2FN%2FNIC%2F81%2F265%2FIX-PT%2FM%2F200601-202606&all_vars=1%7CIMAE+&cid=1)
+
+ITCER obtenido de [SECMCA](https://www.secmca.org/chart/?parent=Tipos+de+cambio&son=%C3%8Dndice+tipo+de+cambio+efectivo+real&url=30%2FN%2FNIC%2F130%2F265%2FIX-PT%2FM%2F200001-202606&all_vars=1%7CITCER+con+USA&cid=3)
 
 IPC general obtenido de [SEMCA](https://www.secmca.org/chart/?parent=Precios&son=%C3%8Dndice+de+precios+al+consumidor&url=1%2FN%2FNIC%2F78%2F265%2FIX-PT%2FM%2F200601-202607&all_vars=1%7CIPC+general)
 
