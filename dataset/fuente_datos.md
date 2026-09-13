@@ -1,20 +1,34 @@
 ## Variables
 
-1.  Tasa de interés activa nominal en MN
+1.  Tasa de interés activa nominal en MN: $$\ln(\text{Tasa}_t) - \ln(\text{Tasa}_{t-1})$$
 
-2.  $\text{Ratio de morosidad}_{it}$: $\frac{\text{Vencidos}_{it} + \text{Cobro Judicial}_{it}}{\text{Cartera de Créditos Neta}_{it} + \text{Provisión de Cartera}_{it}}$
+2.  $\text{Ratio de morosidad}$: $$\frac{\text{Vencidos} + \text{Cobro Judicial}}{\text{Cartera de Créditos Neta} + \text{Provisión de Cartera}}$$
 
-3.  $\text{Crecimiento IMAE}_t$: $\ln(\text{IMAE}_t) - \ln(\text{IMAE}_{t-12})$
+- $\text{Ratio de morosidad}$: $$\text{Ratio de morosidad} - \text{Ratio de morosidad}_{t-1}$$
 
-4.  $\text{Crecimiento ITCER}_t$: $\ln(\text{ITCER}_t) - \ln(\text{ITCER}_{t-12})$
+3.  $\text{Liquidez}$ : $$\frac{\text{Efectivo y Equivalentes de Efectivo}}{\text{Obligaciones con el Público (Depósitos)}}$$
 
-5.  $\text{Inflación}_t$: $\ln(\text{IPC}_t) - \ln(\text{IPC}_{t-12})$
+- $\text{Ratio de morosidad}$: $$\text{Liquidez} - \text{Liquidez}_{t-1}$$
 
-6.  $\text{Liquidez}_{it}$ : $\frac{\text{Efectivo y Equivalentes de Efectivo}_{it}}{\text{Obligaciones con el Público (Depósitos)}_{it}}$
+3.  $\text{Crecimiento IMAE}_t$: $$\ln(\text{IMAE}_t) - \ln(\text{IMAE}_{t-12})$$
 
-7.  Tiempo: actúa como una tendencia determinística no lineal flexible
+4.  $\text{Crecimiento ITCER}_t$: $$\ln(\text{ITCER}_t) - \ln(\text{ITCER}_{t-12})$$
 
-Nota: subíndice $i$ representa a la entidad Bancaria, en cuanto el subíndice $t$ representa el tiempo
+5.  $\text{Crecimiento precios promedio Cafe}_t$: $$\ln(\text{Cafe}_t) - \ln(\text{Cafe}_{t-1})$$
+
+6.  $\text{Crecimiento precios promedio Banano}_t$: $$\ln(\text{Banano}_t) - \ln(\text{Banano}_{t-1})$$
+
+7.  $\text{Crecimiento precios promedio Azucar}_t$: $$\ln(\text{Azucar}_t) - \ln(\text{Azucar}_{t-1})$$
+
+8.  $\text{Inflación}_t$: $$\ln(\text{IPC}_t) - \ln(\text{IPC}_{t-12})$$
+
+9.  Federal Funds Effective Rate (FEDFUNDS) o Tasa efectiva de fondos federales
+
+10. Asegurados activos del INSS: $$\ln(\text{INSS}_t) - \ln(\text{INSS}_{t-12})$$
+
+11. Tiempo: actúa como una tendencia determinística no lineal flexible
+
+Nota: El precio promedio del azúcar se interpolo en términos logarítmicos para obtener valores mayores a 0, el método usado es un auto.arima
 
 ## Base de datos
 
@@ -28,7 +42,19 @@ IMAE obtenido de [SECMCA](https://www.secmca.org/chart/?parent=Producci%C3%B3n&s
 
 ITCER obtenido de [SECMCA](https://www.secmca.org/chart/?parent=Tipos+de+cambio&son=%C3%8Dndice+tipo+de+cambio+efectivo+real&url=30%2FN%2FNIC%2F130%2F265%2FIX-PT%2FM%2F200001-202606&all_vars=1%7CITCER+con+USA&cid=3)
 
+Cafe precio promedio en US\$/QQ (quintales) [SECMCA](https://www.secmca.org/chart/?parent=Comercio+exterior&son=Exportaci%C3%B3n+de+caf%C3%A9%2C+banano+y+az%C3%BAcar&url=21%2FN%2FNIC%2F121-542-541%2F266%2FUSD-QQ46-TN-KG-UV%2FM%2F200301-202603&all_vars=3%7CCaf%C3%A9+precio+promedio+de+exportaci%C3%B3n*6%7CBanano+precio+promedio+de+exportaci%C3%B3n*9%7CAz%C3%BAcar+precio+promedio+de+exportaci%C3%B3n&cid=5)
+
+Banano precio promedio en US\$/T (toneladas) [SECMCA](https://www.secmca.org/chart/?parent=Comercio+exterior&son=Exportaci%C3%B3n+de+caf%C3%A9%2C+banano+y+az%C3%BAcar&url=21%2FN%2FNIC%2F120-125-123%2F266%2FUSD-QQ46-TN-KG-UV%2FM%2F200301-202603&all_vars=1%7CCaf%C3%A9+valor+exportado*4%7CBanano+valor+exportado*7%7CAz%C3%BAcar+valor+exportado&cid=5)
+
+Azucar precio promedio en US\$/KG (kilogramos) [SECMCA](https://www.secmca.org/chart/?parent=Comercio+exterior&son=Exportaci%C3%B3n+de+caf%C3%A9%2C+banano+y+az%C3%BAcar&url=21%2FN%2FNIC%2F120-125-123%2F266%2FUSD-QQ46-TN-KG-UV%2FM%2F200301-202603&all_vars=1%7CCaf%C3%A9+valor+exportado*4%7CBanano+valor+exportado*7%7CAz%C3%BAcar+valor+exportado&cid=5)
+
 IPC general obtenido de [SEMCA](https://www.secmca.org/chart/?parent=Precios&son=%C3%8Dndice+de+precios+al+consumidor&url=1%2FN%2FNIC%2F78%2F265%2FIX-PT%2FM%2F200601-202607&all_vars=1%7CIPC+general)
+
+Federal Funds Effective Rate obtenido de [FRED](https://fred.stlouisfed.org/series/fedfunds)
+
+Asegurados INSS obtenido de [BCN](https://www.bcn.gob.ni/mercado-laboral)
+
+- Indicador Mensual: `Asegurados activos del INSS por actividad económica`
 
 Series de Informe en Excel 2008 y 2019 [SIBOIF](https://www.siboif.gob.ni/consultas/informes?field_informes_value=1&field_categoria_informe_tid=1577)
 
