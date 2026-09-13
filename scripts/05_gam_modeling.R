@@ -14,7 +14,6 @@ pacman::p_load(tidyverse,
 if (!exists("banca")) {
   if (file.exists("csv/banca_nicaragua_estacionarios.csv")) {
     banca_ni <- readr::read_csv("csv/banca_nicaragua_estacionarios.csv")
-    banca <- readr::read_csv("csv/datos_bancario.csv")
   } else {
     source("scripts/03_stationary_test.R")
   }
@@ -22,85 +21,76 @@ if (!exists("banca")) {
 
 #select data ----
 
-banca <- banca %>%
-  dplyr::select(tasa_interes_activo,
-                ratio_morosidad_prop,
-                ratio_liquidez_prop,
-                d_ln_imae,
-                d_ln_ipc,
-                tiempo,
-                mes,
-                tasa_interes_activo_real,
+
+
+banca_ni <- banca_ni %>%
+  dplyr::select(Fecha,
+                Var_Tasa_interes_activa,
+                FEDFUNDS,
+                Var_Morosidad,
+                Var_Liquidez,
+                Var_ln_IMAE,
+                Var_ln_IPC,
+                Var_ln_itcer,
+                Var_ln_inss,
+                Var_ln_cafe,
+                Var_ln_banano,
+                Var_ln_azucar,
+                Tiempo,
+                Mes,
                 crisis_2008,
                 crisis_2018,
                 crisis_covid
   )
 
-banca <- banca %>%
-  dplyr::rename(
-    Tasa_interes_activa = tasa_interes_activo,
-    Morosidad = ratio_morosidad_prop,
-    Liquidez = ratio_liquidez_prop,
-    Var_ln_IMAE = d_ln_imae,
-    Var_ln_IPC = d_ln_ipc,
-    Tiempo = tiempo,
-    Mes = mes,
-    Tasa_interes_activa_real = tasa_interes_activo_real,
-    Crisis_2008 = crisis_2008,
-    Crisis_2018 = crisis_2018,
-    Crisis_covid = crisis_covid
-  ) 
-
-
-banca_ni <- banca_ni %>%
-  dplyr::select(Var_Tasa_interes_activa,
-                Var_Morosidad,
-                Var_Liquidez,
-                Var_ln_IMAE,
-                Var_ln_IPC,
-                Tiempo,
-                Mes
-  )
-
-banca_nombres <- c(
-  "Tasa interés activa (%)",
-  "Morosidad (prop.)",
-  "Liquidez (prop.)",
-  "Var. ln IMAE",
-  "Var. ln IPC",
-  "Tiempo",
-  "Mes",
-  "Tasa interés activa real (%)"
-)
 
 banca_ni_nombres <- c(
+  "Fecha",
   "Var. Tasa interés activa (%)",
+  "FEDFUNDS (%)",
   "Var. Morosidad",
   "Var. Liquidez",
   "Var. ln IMAE",
   "Var. ln IPC",
+  "Var. ln ITCER",
+  "Var. ln INSS",
+  "Var. ln Cafe",
+  "Var. ln Banano",
+  "Var. ln Azucar",
   "Tiempo",
-  "Mes"
+  "Mes",
+  "Dummy 2008",
+  "Dummy 2018",
+  "Dummy Covid"
 )
 
 dplyr::glimpse(banca_ni)
-dplyr::glimpse(banca)
 
-banca %>% dplyr::select(Tasa_interes_activa, Tasa_interes_activa_real,
+
+banca_ni %>% dplyr::select(Var_Tasa_interes_activa, FEDFUNDS,
                         Var_ln_IPC) %>%
   tibble::as_tibble() %>%
   print(n=300)
 
 # std gam models -----
 
-## model 1 all variables as spins ----
-modelo_1 <-mgcv::gam(
-  Var_Morosidad ~ s(Var_Liquidez, k=5) +
+## model 1 all variables as spins with shrinkage ----
+modelo_1 <- mgcv::gam(
+  Var_Morosidad ~ s(Var_Liquidez, k = 5) +
     s(Var_Tasa_interes_activa, k = 5) +
-    s(Var_ln_IMAE, k = 5),
+    s(Var_ln_IMAE, k = 5) +
+    s(Var_ln_IPC, k = 5) +
+    s(Var_ln_itcer, k = 5) +
+    s(Var_ln_cafe, k = 5) +
+    s(Var_ln_azucar, k = 5) +
+    s(Var_ln_banano, k = 5) +
+    s(Var_ln_inss, k = 5) +
+    s(FEDFUNDS, k = 5) +
+    crisis_2008 + crisis_2018 + crisis_covid,
   family = mgcv::scat(link = "identity"),
-  method = "REML",
-  # method = "ML",
+  # method = "REML",
+  method = "ML",
+  select = TRUE, #automatic shrinkage per term
   data = banca_ni
 )
 
@@ -132,7 +122,7 @@ message("h0: the variance of the residuals is constant")
 lmtest::bptest(residuos_modelo_1~ valores_ajustados_modelo_1)
 
 #draw residuals
-gratia::draw(modelo_1, select = "te(Var_Liquidez,Var_ln_IMAE)", residuals = TRUE)
+gratia::draw(modelo_1, select = "s(Var_Liquidez)", residuals = TRUE)
 
 #plotting variable effects
 gratia::draw(modelo_1, ci_level=0.95, select = "s(Var_Liquidez)", residuals = F)
@@ -143,13 +133,23 @@ derivadas_modelo_1 <- gratia::derivatives(modelo_1)
 print(derivadas_modelo_1)
 gratia::draw(derivadas_modelo_1)
 
-## model 2 te in liquidity & imae----
+## model 2 spines with shrinkage in some variables ----
 modelo_te_1 <-mgcv::gam(
-  Var_Morosidad ~ te(Var_Liquidez, Var_ln_IMAE, k=5) +
-    s(Var_Tasa_interes_activa, k = 5),
+  Var_Morosidad ~ 
+    s(Var_Tasa_interes_activa, k = 5) +             
+    s(Var_Liquidez, k = 5) +                          
+    s(Var_ln_IMAE, k = 5, bs = "ts") + # bs="ts" = shrinkage
+    s(Var_ln_IPC, k = 5, bs = "ts") +
+    s(Var_ln_itcer, k = 5, bs = "ts") +
+    s(Var_ln_cafe, k = 5, bs = "ts") +
+    s(Var_ln_azucar, k = 5, bs = "ts") +
+    s(Var_ln_banano, k = 5, bs = "ts") +
+    s(Var_ln_inss, k = 5, bs = "ts") +
+    s(FEDFUNDS, k = 5, bs = "ts") +
+    crisis_2008 + crisis_2018 + crisis_covid,
   family = mgcv::scat(link = "identity"),
-  method = "REML",
-  # method = "ML",
+  # method = "REML",
+  method = "ML",
   data = banca_ni
 )
 
@@ -164,6 +164,7 @@ valores_ajustados_modelo_te_1<- stats::fitted(modelo_te_1)
 
 message("h0: the distribution of the residuals is normal")
 stats::shapiro.test(residuals(modelo_te_1, type = "deviance"))
+gratia::appraise(modelo_te_1)
 message("h0: the variance of the residuals is constant")
 lmtest::bptest(residuos_modelo_te_1~ valores_ajustados_modelo_te_1)
 

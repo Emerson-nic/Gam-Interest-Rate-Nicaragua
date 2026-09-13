@@ -7,7 +7,8 @@ pacman::p_load(readxl,
                tidyverse,
                janitor,
                dplyr,
-               zoo
+               zoo,
+               imputeTS
 )
 
 #load csv ----
@@ -111,15 +112,15 @@ fob <- readr::read_csv("dataset/Exportaciones FOB.csv",
 colnames(fob)[1] <- "fecha"
 
 fob <- fob %>%
-  dplyr::rename(cafe_millones_quitales = "Café precio promedio de exportación",
-                banano_millones_toneladas = "Banano precio promedio de exportación",
-                azucar_millones_kilogramos = "Azúcar precio promedio de exportación")
+  dplyr::rename(cafe_millones = "Café precio promedio de exportación",
+                banano_millones = "Banano precio promedio de exportación",
+                azucar_millones = "Azúcar precio promedio de exportación")
 
 fob <- fob %>%
   dplyr::mutate(fecha = as.Date(fecha, format = "%d-%m-%Y"))
 
 fob %>%
-  dplyr::select(azucar_millones_kilogramos) %>%
+  dplyr::select(azucar_millones) %>%
   tibble::as_tibble() %>%
   print(n=300)
 
@@ -127,32 +128,60 @@ fob %>%
 
 fob <- fob %>%
   dplyr::mutate(
-    azucar_millones_kilogramos = as.numeric(na_if(azucar_millones_kilogramos, "--"))
+    azucar_millones = as.numeric(na_if(azucar_millones, "--")),
+    azucar_millones = dplyr::na_if(azucar_millones, 0)
+  )
+
+# fob <- fob %>%
+#   dplyr::mutate(
+#     #interpolate by connecting the last observation with the next one
+#     azucar_millones = zoo::na.approx(azucar_millones, na.rm=F)
+#   ) %>%
+#   stats::na.omit()
+
+#note: there are four consecutive 'nah' values, so interpolating 
+#like that isn't the best approach.
+
+fob <- fob %>%
+  dplyr::mutate(
+    #the variable is a price that is always positive, so it is interpolated,
+    #using a logarithmic scale prevents interpolation from producing values< = 0
+    ln_azucar_millones_tmp = log(azucar_millones),
+    ln_azucar_millones_tmp = imputeTS::na_kalman(ln_azucar_millones_tmp, model = "auto.arima"),
+    azucar_millones = exp(ln_azucar_millones_tmp)
+  ) %>%
+  dplyr::select(-ln_azucar_millones_tmp) %>%
+  stats::na.omit()
+
+
+fob <- fob %>%
+  dplyr::mutate(
+    ln_cafe_millones = log(cafe_millones),
+    ln_banano_millones = log(banano_millones),
+    ln_azucar_millones = log(azucar_millones)
+  ) %>% dplyr::mutate(
+  d_ln_cafe_millones = ln_cafe_millones - dplyr::lag(ln_cafe_millones, 1),
+  d_ln_banano_millones = ln_banano_millones - dplyr::lag(ln_banano_millones, 1),
+  d_ln_azucar_millones = ln_azucar_millones - dplyr::lag(ln_azucar_millones, 1)
   )
 
 fob <- fob %>%
-  dplyr::mutate(
-    #interpolate by connecting the last observation with the next one
-    azucar_millones_kilogramos = zoo::na.approx(azucar_millones_kilogramos, na.rm=F)
-  ) %>%
+  dplyr::select(-cafe_millones, -ln_cafe_millones,
+                -banano_millones, -ln_banano_millones,
+                -azucar_millones, -ln_azucar_millones) %>%
   stats::na.omit()
 
+fob %>% dplyr::select(d_ln_cafe_millones,
+                      d_ln_banano_millones,
+                      d_ln_azucar_millones) %>%
+  tibble::as_tibble() %>%
+  print(n=300)
 
-fob <- fob %>%
-  dplyr::mutate(
-    ln_cafe_millones_quitales = log(cafe_millones_quitales),
-    ln_banano_millones_toneladas = log(banano_millones_toneladas),
-    ln_azucar_millones_kilogramos = log(azucar_millones_kilogramos),
-    d_ln_cafe_millones_quitales = ln_cafe_millones_quitales - dplyr::lag(ln_cafe_millones_quitales, 12),
-    d_ln_banano_millones_toneladas = ln_banano_millones_toneladas - dplyr::lag(ln_banano_millones_toneladas, 12),
-    d_ln_azucar_millones_kilogramos = ln_azucar_millones_kilogramos - dplyr::lag(ln_azucar_millones_kilogramos, 12)
-  ) %>%
-  dplyr::select(-cafe_millones_quitales, -ln_cafe_millones_quitales,
-                -banano_millones_toneladas, -ln_banano_millones_toneladas,
-                -azucar_millones_kilogramos, -ln_azucar_millones_kilogramos) %>%
-  stats::na.omit()
+#load federal funds effective rate
 
-tibble::as_tibble(fob)
+funds_rate <- readr::read_csv("dataset/FEDFUNDS.csv")
+
+colnames(funds_rate)[1] <- "fecha"
 
 #load xlsx ----
 
@@ -266,25 +295,52 @@ colnames(inss)[13] <- "asegurados_inss"
 inss <- inss %>%
   dplyr::select(
     fecha, asegurados_inss
-    )
+    ) %>%
+  tidyr::drop_na(fecha) 
 
+meses_inss <- c("Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", 
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre")
+
+inss_fecha <- inss %>%
+  dplyr::filter(fecha %in% meses_inss) %>%
+  dplyr::mutate(
+    fechita = seq(from = as.Date("2004-01-01"), by = "month", 
+                  length.out = dplyr::n())
+  ) %>%
+  dplyr::select(fechita, asegurados_inss) %>%
+  dplyr::rename(fecha = fechita)
+  
+inss <- inss_fecha %>%
+  dplyr::mutate(
+    ln_asegurados_inss = log(asegurados_inss),
+    d_ln_asegurados_inss = ln_asegurados_inss - dplyr::lag(ln_asegurados_inss, 12) 
+  ) %>%
+  dplyr::select(-ln_asegurados_inss, -asegurados_inss) %>%
+  stats::na.omit()
+  
+  
 #merging all variables ----
 
 banca <- datos_bancarios %>%
   dplyr::select(fecha, ratio_liquidez, ratio_morosidad) %>%
+  dplyr::inner_join(tasa_interes, by = "fecha") %>%
   dplyr::inner_join(imae, by = "fecha") %>%
   dplyr::inner_join(itcer, by = "fecha") %>%
   dplyr::inner_join(ipc, by = "fecha") %>%
-  dplyr::inner_join(tasa_interes, by = "fecha") %>%
+  dplyr::inner_join(fob, by = "fecha") %>%
+  dplyr::inner_join(funds_rate, by = "fecha") %>%
+  dplyr::inner_join(inss, by = "fecha") %>%
   dplyr::arrange(fecha)
 
 tibble::as_tibble(banca)
 
 banca <- banca %>%
   dplyr::mutate(
-    tasa_interes_activo = tasa_interes_activo / 100,
+    #tasa_interes_activo = tasa_interes_activo / 100,
+    ratio_morosidad = ratio_morosidad * 100,
+    ratio_liquidez = ratio_liquidez * 100
   ) %>%
-  dplyr::select(fecha, ratio_morosidad, ratio_liquidez, d_ln_imae, dplyr::everything())
+  dplyr::select(fecha, ratio_morosidad, ratio_liquidez, tasa_interes_activo, d_ln_imae, dplyr::everything())
 
 banca <- banca %>%
   stats::na.omit()
@@ -299,3 +355,4 @@ banca %>%
 readr::write_csv(banca, "csv/sistema_bancario.csv")
 
 rm(list = ls())
+
