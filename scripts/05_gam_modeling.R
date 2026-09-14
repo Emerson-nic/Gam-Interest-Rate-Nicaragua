@@ -44,7 +44,7 @@ banca_ni <- banca_ni %>%
                 crisis_covid
   )
 
-banca_pca <- banca_ni %>%
+banca_pca <- banca_pca %>%
   dplyr::select(Fecha,
                 Var_Tasa_interes_activa,
                 FEDFUNDS,
@@ -112,7 +112,6 @@ banca_pca_nombres <- c(
 
 dplyr::glimpse(banca_ni)
 dplyr::glimpse(banca_pca)
-
 
 banca_ni %>% dplyr::select(Var_Tasa_interes_activa, FEDFUNDS,
                         Var_ln_IPC) %>%
@@ -254,7 +253,7 @@ summary(modelo_pca_1)
 gam.check(modelo_pca_1)
 
 #autocorrelation
-residuos_modelo_pca_1<- stats::resid(modelo_pca_1, type = "deviance")
+residuos_modelo_pca_1 <- stats::resid(modelo_pca_1, type = "deviance")
 stats::acf(residuos_modelo_pca_1, main = "ACF residuos GAM modelo 1")
 
 valores_ajustados_modelo_pca_1<- stats::fitted(modelo_pca_1)
@@ -339,6 +338,7 @@ modelo_interest <-mgcv::gam(
     s(Var_Liquidez, k = 5, bs = "ts") +                          
     s(PC1_Ciclo, k = 5, bs = "ts") + 
     s(PC1_Moneda, k = 5, bs = "ts") +
+    s(Var_ln_cafe, k=5, bs = "ts") +
     crisis_2008,
   family = mgcv::scat(link = "identity"),
   # method = "REML",
@@ -366,8 +366,9 @@ tseries::adf.test(residuos_modelo_interest)
 modelo_p_value <-mgcv::gam(
   Var_Morosidad ~ 
     s(PC1_Ciclo, k = 5) + 
-    s(PC1_Moneda, k = 5) +
-    crisis_2008,
+    s(PC1_Moneda, k = 5),
+  # s(Var_ln_cafe),
+  # crisis_2008,
   family = mgcv::scat(link = "identity"),
   # method = "REML",
   method = "ML",
@@ -375,6 +376,19 @@ modelo_p_value <-mgcv::gam(
 )
 summary(modelo_p_value)
 gam.check(modelo_p_value)
+
+# message("h0: there are no significant differences")
+# modelo_sin_crisis <- update(modelo_p_value, . ~ . - crisis_2008)
+# anova(modelo_sin_crisis, modelo_p_value, test = "Chisq")
+
+# Analysis of Deviance Table
+# 
+# Model 1: Var_Morosidad ~ s(PC1_Ciclo, k = 5) + s(PC1_Moneda, k = 5)
+# Model 2: Var_Morosidad ~ s(PC1_Ciclo, k = 5) + s(PC1_Moneda, k = 5) + 
+#     crisis_2008
+#   Resid. Df Resid. Dev     Df Deviance Pr(>Chi)
+# 1    209.79    -260.87                         
+# 2    208.64    -263.74 1.1442   2.8713   0.1085
 
 #autocorrelation
 residuos_modelo_p_value <- stats::resid(modelo_p_value , type = "deviance")
@@ -384,6 +398,7 @@ valores_ajustados_modelo_p_value <- stats::fitted(modelo_p_value)
 
 message("h0: the distribution of the residuals is normal")
 stats::shapiro.test(residuals(modelo_p_value, type = "deviance"))
+gratia::appraise(modelo_p_value)
 message("h0: the variance of the residuals is constant")
 lmtest::bptest(residuos_modelo_p_value ~ valores_ajustados_modelo_p_value)
 message("ho: the residuals are not stationary")
@@ -429,7 +444,6 @@ lmtest::bptest(residuos_modelo_p_te ~ valores_ajustados_modelo_p_te)
 message("ho: the residuals are not stationary")
 tseries::adf.test(residuos_modelo_p_te)
 
-
 ### compare models ----
 
 message("to campare the models use method = 'ML', not  method = 'REML' ")
@@ -466,43 +480,6 @@ stats::BIC(modelo_1, modelo_2, modelo_pca_1, modelo_pca_2008,
 # modelo_p_value        10.32291 -208.1584
 # modelo_p_te           12.04707 -203.0687
 
-# simulation ----
 
-#create a massive grid simulating 50x50x50 possible combinations  
-#within the Bank of Nicaragua's historical range
-cuadricula <- expand.grid(
-  Liquidez = seq(min(banca$Liquidez, na.rm = TRUE), max(banca$Liquidez, na.rm = TRUE), length.out = 50),
-  Tasa_interes_activa_real = seq(min(banca$Tasa_interes_activa_real, na.rm = TRUE), max(banca$Tasa_interes_activa_real, na.rm = TRUE), length.out = 50),
-  Var_ln_IMAE = seq(min(banca$Var_ln_IMAE, na.rm = TRUE), max(banca$Var_ln_IMAE, na.rm = TRUE), length.out = 50)
-)
 
-#gam predicts the expected delinquency for each cross-section
-cuadricula$Morosidad_Proyectada <- predict(modelo_inter_dos$gam, newdata = cuadricula)
-
-#take the lowest delinquency rate 
-escenario_optimo <- cuadricula[which.min(cuadricula$Morosidad_Proyectada), ]
-
-print(escenario_optimo)
-
-#save csv 
-
-names(cuadricula)
-
-escenarios_nombres <- c(
-  "Liquidez (prop.)",
-  "Tasa interés activa real (%)",
-  "Var. ln IMAE",
-  "Morosidad proyectada (prop.)"
-)
-
-cuadricula <- cuadricula %>%
-  dplyr::rename(
-    "Liquidez (prop.)" = Liquidez,
-    "Tasa interés activa real (%)" = Tasa_interes_activa_real,
-    "Var. ln IMAE" = Var_ln_IMAE,
-    "Morosidad proyectada (prop.)" = Morosidad_Proyectada   
-  )
-
-cuadricula <- cuadricula * 100
-
-readr::write_csv(cuadricula, "csv/estimacion_morosidad.csv")
+rm(list = ls())
