@@ -119,16 +119,23 @@ modelo_p_value <-mgcv::gam(
   # s(Var_ln_cafe),
   # crisis_2008,
   family = mgcv::scat(link = "identity"),
-  # method = "REML",
-  method = "ML",
+  method = "REML",
+  # method = "ML",
   data = banca_pca
 )
 summary(modelo_p_value)
 gam.check(modelo_p_value)
 
+mgcv::concurvity(modelo_p_value, full = T)
+
 #autocorrelation
 residuos_modelo_p_value <- stats::resid(modelo_p_value , type = "deviance")
 stats::acf(residuos_modelo_p_value, main = "ACF residuos GAM modelo 1")
+
+message("h0: no autocorrelation")
+Box.test(residuos_modelo_p_value, lag = 1,  type = "Ljung-Box")
+Box.test(residuos_modelo_p_value, lag = 6,  type = "Ljung-Box")
+Box.test(residuos_modelo_p_value, lag = 12, type = "Ljung-Box")
 
 valores_ajustados_modelo_p_value <- stats::fitted(modelo_p_value)
 
@@ -141,17 +148,50 @@ message("ho: the residuals are not stationary")
 tseries::adf.test(residuos_modelo_p_value)
 
 #draw residuals
-gratia::draw(modelo_p_value, select = "s(PC1_Ciclo)", residuals = TRUE)
-gratia::draw(modelo_p_value, select = "s(PC1_Moneda)", residuals = TRUE)
+p_res_ciclo  <- gratia::draw(modelo_p_value, select = "s(PC1_Ciclo)", residuals = TRUE)
+p_res_moneda <- gratia::draw(modelo_p_value, select = "s(PC1_Moneda)", residuals = TRUE)
+
+ggplot2::ggsave("plots/residuos_pc1_ciclo.pdf",  plot = p_res_ciclo,  width = 8, height = 5, device = "pdf")
+ggplot2::ggsave("plots/residuos_pc1_moneda.pdf", plot = p_res_moneda, width = 8, height = 5, device = "pdf")
 
 #plotting variable effects
-gratia::draw(modelo_p_value, ci_level=0.95, select = "s(PC1_Ciclo)", residuals = F)
-gratia::draw(modelo_p_value, ci_level=0.95, select = "s(PC1_Moneda)", residuals = F)
+p_eff_ciclo  <- gratia::draw(modelo_p_value, ci_level=0.95, select = "s(PC1_Ciclo)", residuals = F)
+p_eff_moneda <- gratia::draw(modelo_p_value, ci_level=0.95, select = "s(PC1_Moneda)", residuals = F)
+
+ggplot2::ggsave("plots/efecto_pc1_ciclo.pdf",  plot = p_eff_ciclo,  width = 8, height = 5, device = "pdf")
+ggplot2::ggsave("plots/efecto_pc1_moneda.pdf", plot = p_eff_moneda, width = 8, height = 5, device = "pdf")
 
 #extract marginal effect
 derivadas_modelo_p_value <- gratia::derivatives(modelo_p_value)
 print(derivadas_modelo_p_value)
-gratia::draw(derivadas_modelo_p_value)
+
+readr::write_csv(derivadas_modelo_p_value, "csv/derivas_modelo.csv")
+
+p_derivadas <- gratia::draw(derivadas_modelo_p_value)
+ggplot2::ggsave("plots/derivadas_marginales.pdf", plot = p_derivadas, width = 9, height = 5, device = "pdf")
+
+#extract marginal statistically significant
+
+derivadas <- derivadas_modelo_p_value %>%
+  dplyr::filter(.lower_ci > 0 | .upper_ci < 0)
+
+derivas_ciclo <- derivadas %>%
+  dplyr::filter(.smooth == "s(PC1_Ciclo)") %>%
+  dplyr::select(PC1_Ciclo, .derivative, .se , .lower_ci, .upper_ci)
+
+readr::write_csv(derivas_ciclo, "csv/derivas_ciclo.csv")
+
+#note: the ciclo variable's range is from 0.42 to 4.3
+
+derivas_moneda <- derivadas %>%
+  dplyr::filter(.smooth == "s(PC1_Moneda)") %>%
+  dplyr::select(PC1_Moneda, .derivative, .se , .lower_ci, .upper_ci)
+
+readr::write_csv(derivas_moneda, "csv/derivas_moneda.csv")
+
+#note: the moneda variable's range is from -4.5 to 0.75
+
+message("for a scenario analysis, both variables must be significant")
 
 #forecast ----
 
@@ -160,59 +200,66 @@ pca_moneda_pred <- stats::prcomp(~ Var_ln_IPC + Var_ln_itcer,
                                  data = banca_pca,
                                  center = TRUE, scale. = TRUE)
 
+summary(pca_moneda_pred)
+pca_moneda_pred$rotation
+
 pca_ciclo_pred <- stats::prcomp(~ Var_ln_IMAE + Var_ln_inss + FEDFUNDS,
                                 data = banca_pca,
                                 center = TRUE, scale. = TRUE)
 
-## base scenario
-
-base_moneda <- data.frame(
-  Var_ln_IPC = 0.008, 
-  Var_ln_itcer = -0.002
-)
-
-base_ciclo <- data.frame(
-  Var_ln_IMAE = 0.010,
-  Var_ln_inss = 0.005,
-  FEDFUNDS = 4.50     
-)
-
-pc1_moneda_base <- predict(pca_moneda_pred, newdata = base_moneda)[, "PC1"]
-pc1_ciclo_base  <- predict(pca_ciclo_pred,  newdata = base_ciclo)[, "PC1"]
-
-## forecast in differences
-pronostico_diff <- predict(
-  modelo_p_value,
-  newdata = data.frame(PC1_Ciclo = pc1_ciclo_nuevo, PC1_Moneda = pc1_moneda_nuevo),
-  se.fit = TRUE
-)
-
-summary(pronostico_diff)
-pronostico_diff$fit #projected change in delinquencies
-pronostico_diff$se.fit  #standard error 
-
-## make growth rate to nominal
-ultimo_digito <- dplyr::last(banca_pca$Var_Morosidad)  
-
-morosidad_nivel_proyectada <- ultimo_digito + pronostico_diff$fit
-ic_inferior <- ultimo_digito + (pronostico_diff$fit - 1.96 * pronostico_diff$se.fit)
-ic_superior <- ultimo_digito + (pronostico_diff$fit + 1.96 * pronostico_diff$se.fit)
-
-morosidad_nivel_proyectada
-ic_inferior
-ic_superior
+summary(pca_ciclo_pred)
+pca_ciclo_pred$rotation
 
 
-escenario <- data.frame(
-  escenario = "Base",
-  resultado = morosidad_nivel_proyectada,
-  ci_inf = ic_inferior,
-  ci_sup = ic_superior
-)
-
-rownames(escenario) <- NULL
-
-tibble::as_tibble(escenario)
+# ## base scenario
+# 
+# base_moneda <- data.frame(
+#   Var_ln_IPC = 0.008, 
+#   Var_ln_itcer = -0.002
+# )
+# 
+# base_ciclo <- data.frame(
+#   Var_ln_IMAE = 0.010,
+#   Var_ln_inss = 0.005,
+#   FEDFUNDS = 4.50     
+# )
+# 
+# pc1_moneda_base <- predict(pca_moneda_pred, newdata = base_moneda)[, "PC1"]
+# pc1_ciclo_base  <- predict(pca_ciclo_pred,  newdata = base_ciclo)[, "PC1"]
+# 
+# ## forecast in differences
+# pronostico_diff <- predict(
+#   modelo_p_value,
+#   newdata = data.frame(PC1_Ciclo = pc1_moneda_base, PC1_Moneda = pc1_ciclo_base),
+#   se.fit = TRUE
+# )
+# 
+# summary(pronostico_diff)
+# pronostico_diff$fit #projected change in delinquencies
+# pronostico_diff$se.fit  #standard error 
+# 
+# ## make growth rate to nominal
+# ultimo_digito <- dplyr::last(banca_pca$Var_Morosidad)  
+# 
+# morosidad_nivel_proyectada <- ultimo_digito + pronostico_diff$fit
+# ic_inferior <- ultimo_digito + (pronostico_diff$fit - 1.96 * pronostico_diff$se.fit)
+# ic_superior <- ultimo_digito + (pronostico_diff$fit + 1.96 * pronostico_diff$se.fit)
+# 
+# morosidad_nivel_proyectada
+# ic_inferior
+# ic_superior
+# 
+# 
+# escenario <- data.frame(
+#   escenario = "Base",
+#   resultado = morosidad_nivel_proyectada,
+#   ci_inf = ic_inferior,
+#   ci_sup = ic_superior
+# )
+# 
+# rownames(escenario) <- NULL
+# 
+# tibble::as_tibble(escenario)
 
 ## funcion to forescast
 
@@ -247,17 +294,42 @@ pronostico_morosidad <- function(base_moneda,
 
 ##applicated funtion
 
-## the worst scenario
+## base
 base_moneda <- data.frame(
-  Var_ln_IPC   = 0.008, 
+  Var_ln_IPC = 0.008, 
   Var_ln_itcer = -0.002
 )
 
 base_ciclo <- data.frame(
   Var_ln_IMAE = 0.010,
   Var_ln_inss = 0.005,
-  FEDFUNDS    = 4.50     
+  FEDFUNDS = 4.50     
 )
+
+## adv
+base_moneda_adv <- data.frame(
+  Var_ln_IPC = 0.08, 
+  Var_ln_itcer = -0.02
+)
+
+base_ciclo_adv <- data.frame(
+  Var_ln_IMAE = 0.10,
+  Var_ln_inss = 0.05,
+  FEDFUNDS = 2.50     
+)
+
+## worst
+base_moneda_peor <- data.frame(
+  Var_ln_IPC = 0.2, 
+  Var_ln_itcer = -0.010
+)
+
+base_ciclo_peor <- data.frame(
+  Var_ln_IMAE = -0.005,
+  Var_ln_inss = -0.005,
+  FEDFUNDS = 8.50     
+)
+
 
 lista_escenarios <- list(
   list(nombre = "Base", moneda = base_moneda, ciclo = base_ciclo),
@@ -275,68 +347,4 @@ escenarios <- purrr::map_dfr(lista_escenarios, function(esc) {
 
 tibble::as_tibble(escenarios)
 
-# simulation ----
 
-#create a massive grid simulating 50x50x50 possible combinations  
-#within the Bank of Nicaragua's historical range
-cuadricula_macro <- expand.grid(
-  #PC1_Moneda
-  Var_ln_IPC   = seq(min(banca_pca$Var_ln_IPC, na.rm = TRUE), 
-                     max(banca_pca$Var_ln_IPC, na.rm = TRUE), length.out = 15),
-  Var_ln_itcer = seq(min(banca_pca$Var_ln_itcer, na.rm = TRUE), 
-                     max(banca_pca$Var_ln_itcer, na.rm = TRUE), length.out = 15),
-  #PC1_Ciclo
-  Var_ln_IMAE  = seq(min(banca_pca$Var_ln_IMAE, na.rm = TRUE), 
-                     max(banca_pca$Var_ln_IMAE, na.rm = TRUE), length.out = 15),
-  Var_ln_inss  = seq(min(banca_pca$Var_ln_inss, na.rm = TRUE), 
-                     max(banca_pca$Var_ln_inss, na.rm = TRUE), length.out = 15),
-  FEDFUNDS     = seq(min(banca_pca$FEDFUNDS, na.rm = TRUE), 
-                     max(banca_pca$FEDFUNDS, na.rm = TRUE), length.out = 15)
-)
-
-#make PC1_Moneda & PC1_Ciclo
-cuadricula_macro$PC1_Moneda <- predict(pca_moneda_pred, 
-                                       newdata = cuadricula_macro[, c("Var_ln_IPC", "Var_ln_itcer")])[, "PC1"]
-
-cuadricula_macro$PC1_Ciclo  <- predict(pca_ciclo_pred, 
-                                       newdata = cuadricula_macro[, c("Var_ln_IMAE", "Var_ln_inss", "FEDFUNDS")])[, "PC1"]
-
-#forecasting the change in delinquency (differences) and transform at the level
-prediccion_gam <- predict(
-  modelo_p_value,
-  newdata = data.frame(
-    PC1_Ciclo  = cuadricula_macro$PC1_Ciclo,
-    PC1_Moneda = cuadricula_macro$PC1_Moneda
-  ),
-  se.fit = TRUE
-)
-
-cuadricula_macro$Var_Morosidad_Proyectada <- as.numeric(prediccion_gam$fit)
-cuadricula_macro$Morosidad_Nivel_Proyectada <- as.numeric(ultimo_digito + prediccion_gam$fit)
-cuadricula_macro$IC_Inferior <- as.numeric(ultimo_digito + (prediccion_gam$fit - 1.96 * prediccion_gam$se.fit))
-cuadricula_macro$IC_Superior <- as.numeric(ultimo_digito + (prediccion_gam$fit + 1.96 * prediccion_gam$se.fit))
-
-
-print(tibble::as_tibble(cuadricula_macro))
-
-#save csv 
-
-names(cuadricula_macro)
-
-cuadricula_exportar <- cuadricula_macro %>%
-  dplyr::rename(
-    "Var. ln IPC" = Var_ln_IPC,
-    "Var. ln ITCER"= Var_ln_itcer,
-    "Var. ln IMAE" = Var_ln_IMAE,
-    "Var. ln INSS" = Var_ln_inss,
-    "FEDFUNDS (%)" = FEDFUNDS,
-    "PC1 Moneda" = PC1_Moneda,
-    "PC1 Ciclo" = PC1_Ciclo,
-    "Var. Morosidad Proyectada" = Var_Morosidad_Proyectada,
-    "Morosidad Nivel Proyectada" = Morosidad_Nivel_Proyectada,
-    "IC Inferior" = IC_Inferior,
-    "IC Superior" = IC_Superior
-  )
-
-#note: its to havy
-#readr::write_csv(cuadricula_exportar, "csv/estimacion_morosidad.csv")
